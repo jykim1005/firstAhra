@@ -104,4 +104,6 @@ else:
             except Exception as e:
                 st.error(f"저장 실패! 에러: {e}")
 
-        if st.button("
+        if st.button("처음으로"):
+            for k in list(st.session_state.keys()): del st.session_state[k]
+            st.rerun()
