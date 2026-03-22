@@ -97,9 +97,37 @@ else:
         if st.session_state.show_desc:
             st.info(f"**정답:** {p['ans']}\n\n**설명:** {p['desc']}")
 
-    # --- 5. 결과 및 랭킹 저장 ---
+  # --- 5. 결과 및 랭킹 저장 ---
     else:
         duration = round(time.time() - st.session_state.start_time, 1)
         st.balloons()
         st.header("🏁 모든 문제를 마쳤습니다!")
-        st.write(f"### {st.session_state.user
+        st.write(f"### {st.session_state.user_name}님의 최종 성적")
+        st.write(f"- 맞힌 개수: {st.session_state.score} / {len(probs)}")
+        st.write(f"- 총 소요 시간: {duration}초")
+
+        if st.button("🏆 내 기록 랭킹에 등록하기"):
+            try:
+                conn = st.connection("gsheets", type=GSheetsConnection)
+                # 시트 읽기 시도
+                try:
+                    df = conn.read(worksheet="Ranking")
+                except:
+                    df = pd.DataFrame(columns=["Name", "Score", "Time", "Date"])
+                
+                new_row = pd.DataFrame([{
+                    "Name": st.session_state.user_name,
+                    "Score": st.session_state.score,
+                    "Time": duration,
+                    "Date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                }])
+                
+                result_df = pd.concat([df, new_row], ignore_index=True)
+                conn.update(worksheet="Ranking", data=result_df)
+                st.success("랭킹 저장 성공! 🥳")
+            except Exception as e:
+                st.error(f"저장 실패! 에러: {e}")
+
+        if st.button("처음으로 돌아가기"):
+            for k in list(st.session_state.keys()): del st.session_state[k]
+            st.rerun()
