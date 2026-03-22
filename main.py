@@ -89,28 +89,23 @@ else:
 
         if st.button("🏆 내 기록 랭킹에 등록하기"):
             try:
-                # 구글 시트 연결
+                # 1. 시트 연결하기
                 conn = st.connection("gsheets", type=GSheetsConnection)
                 
-                # 기존 데이터 읽기
-                try:
-                    df = conn.read(worksheet="Ranking")
-                except:
-                    df = pd.DataFrame(columns=["Name", "Score", "Time", "Date"])
-                
-                # 새 기록 추가
+                # 2. 새 기록 만들기
                 new_data = pd.DataFrame([{
-                    "Name": st.session_state.user_name,
-                    "Score": st.session_state.score,
-                    "Time": total_time,
+                    "Name": str(st.session_state.user_name),
+                    "Score": int(st.session_state.score),
+                    "Time": float(total_time),
                     "Date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 }])
                 
-                updated_df = pd.concat([df, new_data], ignore_index=True)
-                conn.update(worksheet="Ranking", data=updated_df)
-                st.success("랭킹 등록 완료! 친구들에게 자랑하세요!")
+                # 3. 시트에 바로 추가하기 (가장 튼튼한 방식)
+                conn.create(worksheet="Ranking", data=new_data)
+                st.success("와! 드디어 랭킹 등록에 성공했어요! 🥳")
             except Exception as e:
-                st.error("저장에 실패했어요. 구글 시트 권한(편집자)을 확인해주세요!")
+                # 에러가 나면 어떤 에러인지 화면에 보여줘요
+                st.error(f"아직 저장이 안 돼요. 에러 내용: {e}")
 
         if st.button("처음으로 돌아가기"):
             for key in list(st.session_state.keys()):
