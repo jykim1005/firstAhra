@@ -1,94 +1,109 @@
 import streamlit as st
 import pandas as pd
 import time
-from streamlit_gsheets import GSheetsConnection  # 이 줄이 꼭 있어야 해요!
+from streamlit_gsheets import GSheetsConnection
 
-# --- 앱 제목 ---
-st.title("🧠 문제적 남자: 챌린지 모드")
+# --- 앱 설정 및 제목 ---
+st.set_page_config(page_title="문제적 남자 챌린지")
+st.title("🧠 문제적 남자: 30인분 뇌섹 퀴즈")
 
-# --- 문제 데이터 (여기에 문제를 원하는 만큼 추가해!) ---
-problems = [
-    {
-        "q": "문제 1: 1, 11, 21, 1211, 111221, ? 에 들어갈 숫자는?",
-        "img": "https://img1.daumcdn.net/thumb/R1280x0/?scode=mtistory2&fname=https%3A%2F%2Fblog.kakaocdn.net%2Fdn%2FbcM6W5%2FbtqByS8zS8H%2F6kK6K6K6K6K6K6K6K6K6K6%2Fimg.jpg", 
-        "ans": "312211",
-        "hint": "숫자를 소리 내어 읽어보세요. (예: 1이 한 개 = 11)"
-    },
-    {
-        "q": "문제 2: 'SEX' + 'TEN' = '17' 일 때, 'TEN' + 'TEN'은?",
-        "img": None,
-        "ans": "20",
-        "hint": "로마 숫자(X, V, I 등)를 생각해보세요."
-    },
-    {
-        "q": "문제 3: 가로등 밑에 동전이 떨어져 있다. 하지만 가로등은 꺼져 있고 달빛도 없다. 그런데 멀리서 오던 사람이 동전을 바로 찾아냈다. 어떻게 된 일일까?",
-        "img": None,
-        "ans": "낮이었기 때문에",
-        "hint": "빛이 없어도 물체를 볼 수 있는 시간대를 생각해보세요."
-    }
-]
+# --- 1. 전체 30문제 데이터 (예시 3개 + 나머지 빈칸) ---
+# 중학생 개발자님, 여기에 문제를 30개까지 채워넣으세요!
+if 'problems' not in st.session_state:
+    st.session_state.problems = [
+        {"q": "Q1. 1, 11, 21, 1211, 111221, ? (개미수열)", "ans": "312211", "desc": "숫자를 읽고 그 개수를 뒤에 붙이는 방식입니다. 1(1개) -> 11, 1(2개) -> 12..."},
+        {"q": "Q2. 'TEN' + 'TEN' = ?", "ans": "20", "desc": "로마 숫자 X(10)와 X(10)를 더하면 20입니다."},
+        {"q": "Q3. 낮에 동전을 찾은 이유는?", "ans": "낮이라서", "desc": "빛이 없어도 낮에는 해가 떠있기 때문에 동전이 잘 보입니다."},
+        # ... 여기에 4번부터 30번까지 같은 형식으로 추가하세요!
+    ]
+    # 30개를 채우기 귀찮다면 아래 코드가 자동으로 가짜 문제를 만들어줍니다.
+    for i in range(4, 31):
+        st.session_state.problems.append({"q": f"Q{i}. 준비 중인 문제입니다.", "ans": "패스", "desc": "아직 설명이 등록되지 않았습니다."})
 
-# --- 상태 관리 (이름, 문제 번호 등 저장) ---
+# --- 2. 상태 관리 초기화 ---
 if 'user_name' not in st.session_state:
     name = st.text_input("사용자 이름을 입력하세요:")
     if st.button("시작하기"):
         st.session_state.user_name = name
         st.session_state.q_idx = 0
         st.session_state.score = 0
+        st.session_state.show_desc = False # 설명 보기 상태
         st.session_state.start_time = time.time()
         st.rerun()
+
 else:
-    # 모든 문제를 다 풀었는지 확인
+    # 랭킹 등록 함수
+    def save_ranking(final_score, elapsed_time):
+        try:
+            conn = st.connection("gsheets", type=GSheetsConnection)
+            existing_data = conn.read(worksheet="Ranking")
+            new_record = pd.DataFrame([{
+                "Name": st.session_state.user_name,
+                "Score": final_score,
+                "Time": elapsed_time,
+                "Date": time.strftime("%Y-%m-%d %H:%M:%S")
+            }])
+            updated_df = pd.concat([existing_data, new_record], ignore_index=True)
+            conn.update(worksheet="Ranking", data=updated_df)
+            st.success("🏆 랭킹 등록 완료!")
+        except:
+            st.error("구글 시트 연결을 확인해주세요!")
+
+    # --- 3. 문제 풀이 화면 ---
+    problems = st.session_state.problems
     if st.session_state.q_idx < len(problems):
-        p = problems[st.session_state.q_idx]
+        curr_p = problems[st.session_state.q_idx]
+        st.sidebar.write(f"현재 문제: {st.session_state.q_idx + 1} / 30")
+        st.sidebar.write(f"맞힌 개수: {st.session_state.score}")
         
-        st.subheader(f"Q{st.session_state.q_idx + 1}. {p['q']}")
-        if p['img']:
-            st.image(p['img'])
+        st.subheader(curr_p['q'])
         
-        if st.button("💡 힌트 보기"):
-            st.info(p['hint'])
-            
-        user_ans = st.text_input("정답 입력:", key=f"ans_{st.session_state.q_idx}")
+        # 정답 입력창
+        user_ans = st.text_input("정답을 입력하세요:", key=f"input_{st.session_state.q_idx}")
         
-        if st.button("제출하기"):
-            if user_ans.replace(" ", "") == p['ans']:
-                st.success("정답입니다! 👏")
-                st.session_state.score += 1
+        # 버튼들 배치
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            if st.button("제출"):
+                if user_ans == curr_p['ans']:
+                    st.success("정답입니다!")
+                    st.session_state.score += 1
+                    st.session_state.show_desc = True # 정답 맞혀도 설명 보여주기
+                else:
+                    st.error("틀렸습니다!")
+
+        with col2:
+            if st.button("🏳️ 포기하기"):
+                st.session_state.show_desc = True # 설명 보기 활성화
+        
+        with col3:
+            if st.button("➡️ 다음문제"):
                 st.session_state.q_idx += 1
-                time.sleep(1) # 1초 쉬었다가
-                st.rerun()    # 다음 문제로!
-            else:
-                st.error("틀렸습니다. 다시 생각해보세요!")
-    
-    # 마지막 결과 화면
+                st.session_state.show_desc = False # 설명 가리기 초기화
+                st.rerun()
+
+        with col4:
+            if st.button("🛑 그만하기"):
+                st.session_state.q_idx = 999 # 종료 상태로 만들기
+                st.rerun()
+
+        # 포기하기나 정답 제출 후 설명 보여주기
+        if st.session_state.show_desc:
+            st.info(f"**정답:** {curr_p['ans']}\n\n**설명:** {curr_p['desc']}")
+
+    # --- 4. 종료 화면 ---
     else:
         total_time = round(time.time() - st.session_state.start_time, 1)
         st.balloons()
-        st.header("🏁 모든 문제를 완료했습니다!")
-        st.write(f"최종 점수: {st.session_state.score} / {len(problems)}")
-        st.write(f"총 소요 시간: {total_time}초")
+        st.header("🏁 풀이가 종료되었습니다!")
+        st.write(f"최종 성적: {st.session_state.score} 문제 성공")
+        st.write(f"소요 시간: {total_time}초")
         
-        if st.button("다시 시작하기"):
-            del st.session_state.user_name
+        if st.button("기록 저장하고 랭킹 등록"):
+            save_ranking(st.session_state.score, total_time)
+            
+        if st.button("처음으로 돌아가기"):
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
             st.rerun()
-
-
-# 기록 저장 로직
-if st.button("내 기록 랭킹에 등록하기"):
-    try:
-        conn = st.connection("gsheets", type=GSheetsConnection)
-        existing_data = conn.read(worksheet="Ranking")
-        
-        new_record = pd.DataFrame([{
-            "Name": st.session_state.user_name,
-            "Score": st.session_state.score,
-            "Time": total_time,
-            "Date": time.strftime("%Y-%m-%d %H:%M:%S")
-        }])
-        
-        updated_df = pd.concat([existing_data, new_record], ignore_index=True)
-        conn.update(worksheet="Ranking", data=updated_df)
-        st.success("🏆 랭킹 등록 완료! 구글 시트를 확인해보세요.")
-    except Exception as e:
-        st.error(f"오류가 발생했어요: {e}")
